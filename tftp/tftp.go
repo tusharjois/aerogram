@@ -62,6 +62,10 @@ func parsePacket(pkt *bytes.Buffer) {
 
 }
 
-func ListenForFile() {
+func ListenForWriteRequest() {
 	fmt.Printf("% x\n", createWriteRequest("rfc1350.txt"))
+}
+
+func WriteFileToServer() {
+
 }
