@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	tftp.CreateWritePacket("hello.txt")
+	tftp.ListenForFile()
 }
