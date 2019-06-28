@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"net"
 )
 
 type tftpError uint8
@@ -39,6 +40,16 @@ func createWriteRequest(filename string) *bytes.Buffer {
 	return pkt
 }
 
+func createData(blockNum uint16, dataBlock []byte) *bytes.Buffer {
+	var data = []interface{}{
+		uint16(3),        // opcode (ERR)
+		uint16(blockNum), // block number
+		dataBlock,        // data
+	}
+	pkt := createPacket(data)
+	return pkt
+}
+
 func createAck(blockNum uint16) *bytes.Buffer {
 	var data = []interface{}{
 		uint16(4),        // opcode (ACK)
@@ -63,9 +74,25 @@ func parsePacket(pkt *bytes.Buffer) {
 }
 
 func ListenForWriteRequest() {
-	fmt.Printf("% x\n", createWriteRequest("rfc1350.txt"))
+	// fmt.Printf("% x\n", createWriteRequest("rfc1350.txt"))
 }
 
-func WriteFileToServer() {
+func WriteFileToServer(fname, addr string) error {
+	raddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return err
+	}
 
+	serverConn, err := net.DialUDP("udp", nil, raddr)
+	if err != nil {
+		return err
+	}
+
+	wrq := createWriteRequest(fname)
+	_, err := serverConn.Write(wrq.Bytes())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
