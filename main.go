@@ -15,7 +15,7 @@ func main() {
 		err := tftp.ListenForWriteRequest("localhost:26465")
 		fmt.Println(err)
 	} else {
-		err := tftp.WriteFileToServer("txfile", "localhost:26465")
+		err := tftp.WriteFileToServer("", "localhost:26465")
 		fmt.Println(err)
 	}
 }

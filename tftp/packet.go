@@ -49,7 +49,7 @@ func parsePacket(buf []byte) (tftpOp, []byte, error) {
 	switch opcode {
 	case opWrq:
 		var lenFilename = 0
-		for lenFilename+1 < len(buf) && buf[2+lenFilename] != 0x00 {
+		for 2+lenFilename+1 < len(buf) && buf[2+lenFilename] != 0x00 {
 			lenFilename++
 		}
 		if lenFilename+1 > len(buf) {
@@ -58,7 +58,6 @@ func parsePacket(buf []byte) (tftpOp, []byte, error) {
 		fname := make([]byte, lenFilename)
 		fnameReader := bytes.NewReader(buf[2 : 2+lenFilename])
 		err := binary.Read(fnameReader, binary.BigEndian, &fname)
-		fmt.Printf("%s\n", fname)
 		if err != nil {
 			return opError, nil, fmt.Errorf("error in reading filename for WRQ: %v", err)
 		}
@@ -72,9 +71,26 @@ func parsePacket(buf []byte) (tftpOp, []byte, error) {
 
 		return opcode, fname, nil
 
+	case opAck:
+		if len(buf) == 4 {
+			return opcode, buf[2:], nil
+		}
+		return opError, nil, fmt.Errorf("invalid format for ACK")
+	case opData:
+		return opcode, buf[2:], nil
+
 	default:
 		return opError, nil, fmt.Errorf("invalid opcode %v", opcode)
 	}
+}
+
+func getPacketBlock(num []byte) uint16 {
+	var blockNum uint16
+	if len(num) != 2 {
+		return 0 // Error
+	}
+	binary.Read(bytes.NewReader(num), binary.BigEndian, &blockNum)
+	return blockNum
 }
 
 func createWriteRequest(filename string) *bytes.Buffer {
