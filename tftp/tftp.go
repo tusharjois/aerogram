@@ -1,80 +1,77 @@
 package tftp
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
+	"log"
 	"net"
+	"os"
 )
 
-type tftpError uint8
-
-const (
-	errUndef tftpError = iota
-	errNotFound
-	errAccess
-	errNoSpace
-	errIllegalOp
-)
-
-func createPacket(data []interface{}) *bytes.Buffer {
-	pkt := new(bytes.Buffer)
-	for _, v := range data {
-		err := binary.Write(pkt, binary.BigEndian, v)
-		if err != nil {
-			fmt.Println("binary.Write failed:", err)
-		}
-	}
-	return pkt
-}
-
-func createWriteRequest(filename string) *bytes.Buffer {
-	var data = []interface{}{
-		uint16(2),        // opcode (WRQ)
-		[]byte(filename), // filename
-		uint8(0),         // NUL
-		[]byte("octet"),  // mode
-		uint8(0),         // NUL
-	}
-	pkt := createPacket(data)
-	return pkt
-}
-
-func createData(blockNum uint16, dataBlock []byte) *bytes.Buffer {
-	var data = []interface{}{
-		uint16(3),        // opcode (ERR)
-		uint16(blockNum), // block number
-		dataBlock,        // data
-	}
-	pkt := createPacket(data)
-	return pkt
-}
-
-func createAck(blockNum uint16) *bytes.Buffer {
-	var data = []interface{}{
-		uint16(4),        // opcode (ACK)
-		uint16(blockNum), // block number
-	}
-	pkt := createPacket(data)
-	return pkt
-}
-
-func createError(e tftpError) *bytes.Buffer {
-	var data = []interface{}{
-		uint16(5), // opcode (ERR)
-		uint8(e),  // error number
-		uint8(0),  // NUL
-	}
-	pkt := createPacket(data)
-	return pkt
-}
-
-func parsePacket(pkt *bytes.Buffer) {
-
-}
-
-func ListenForWriteRequest() {
+func ListenForWriteRequest(addr string) error {
 	// fmt.Printf("% x\n", createWriteRequest("rfc1350.txt"))
+	laddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return err
+	}
+
+	listenConn, err := net.ListenUDP("udp", laddr)
+	if err != nil {
+		return err
+	}
+
+	defer listenConn.Close()
+
+	for {
+		// Wait for a connection.
+		buf := make([]byte, 512)
+		n, srcAddr, err := listenConn.ReadFromUDP(buf)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%v bytes from %v: %x\n", n, srcAddr, buf[:n])
+		go handleFileTransfer(listenConn, srcAddr, buf[:n])
+
+		// Handle the connection in a new goroutine.
+		// The loop then returns to accepting, so that
+		// multiple connections may be served concurrently.
+		// go func(c net.UDPConn) {
+		// 	fmt.Print()
+		// 	// Shut down the connection.
+		// 	c.Close()
+		// }(conn)
+	}
+}
+
+func handleFileTransfer(listenConn *net.UDPConn, srcAddr *net.UDPAddr,
+	buf []byte) {
+	opcode, data, err := parsePacket(buf)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	if opcode != opWrq {
+		errPkt := createError(errIllegalOp)
+		_, err := listenConn.WriteToUDP(errPkt.Bytes(), srcAddr)
+		if err != nil {
+			log.Print(fmt.Errorf("error in responding to error packet: %v", err))
+		}
+		return
+	}
+
+	f, err := os.Create(string(data))
+	if err != nil {
+		log.Fatal(fmt.Errorf("cannot open file %s: %v", data, err))
+	}
+	defer f.Close()
+
+	var blockNum uint16 = 0
+	initAck := createAck(blockNum)
+	_, err = listenConn.WriteToUDP(initAck.Bytes(), srcAddr)
+	if err != nil {
+		log.Print(fmt.Errorf("error in responding to WRQ: %v", err))
+	}
+	// TODO: timeouts when not lockstep
 }
 
 func WriteFileToServer(fname, addr string) error {
@@ -89,9 +86,20 @@ func WriteFileToServer(fname, addr string) error {
 	}
 
 	wrq := createWriteRequest(fname)
-	_, err := serverConn.Write(wrq.Bytes())
+	_, err = serverConn.Write(wrq.Bytes())
 	if err != nil {
 		return err
+	}
+
+	for {
+		buf := make([]byte, 32)
+		n, srvAddr, err := serverConn.ReadFromUDP(buf)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%v bytes from %v: %v\n", n, srvAddr, buf[:n])
+		break
 	}
 
 	return nil

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/tusharjois/aerogram/tftp"
 )
 
@@ -11,8 +12,10 @@ func main() {
 	flag.Parse()
 
 	if *isServer {
-		tftp.ListenForWriteRequest()
+		err := tftp.ListenForWriteRequest("localhost:26465")
+		fmt.Println(err)
 	} else {
-		tftp.WriteFileToServer()
+		err := tftp.WriteFileToServer("txfile", "localhost:26465")
+		fmt.Println(err)
 	}
 }
