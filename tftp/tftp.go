@@ -10,8 +10,9 @@ import (
 )
 
 // TODO: make this an option
-// const optionBlocksize uint16 = 65464
-const optionBlocksize uint16 = 1428
+const optionBlocksize uint16 = 65464
+
+// const optionBlocksize uint16 = 1428
 
 func ListenForWriteRequest(addr, outFile string) error {
 	// fmt.Printf("% x\n", createWriteRequest("rfc1350.txt"))
@@ -206,6 +207,7 @@ func WriteFileToServer(fname, addr string) error {
 
 		// TODO: out-of-order messages
 		if block != blockNum {
+			log.Printf("[WARN] client: sending duplicate data for %d\n", blockNum)
 			_, err = serverConn.Write(lastPacket.Bytes())
 			if err != nil {
 				log.Print(fmt.Errorf("error in sending duplicate data %d: %v",
@@ -235,6 +237,7 @@ func WriteFileToServer(fname, addr string) error {
 			return err
 			// TODO: Make the error packet a function
 		}
+		log.Printf("[INFO] client: sent data for %d\n", blockNum)
 		//if n < int(optionBlocksize)+4 {
 		if rErr == io.EOF {
 			// TODO: get final ack
