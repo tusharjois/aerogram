@@ -10,7 +10,8 @@ import (
 )
 
 // TODO: make this an option
-const optionBlocksize uint16 = 65464
+// const optionBlocksize uint16 = 65464
+const optionBlocksize uint16 = 1428
 
 func ListenForWriteRequest(addr, outFile string) error {
 	// fmt.Printf("% x\n", createWriteRequest("rfc1350.txt"))
@@ -28,7 +29,7 @@ func ListenForWriteRequest(addr, outFile string) error {
 
 	//for {
 	// Wait for a connection.
-	buf := make([]byte, 516)
+	buf := make([]byte, optionBlocksize+4)
 	n, srcAddr, err := listenConn.ReadFromUDP(buf)
 	if err != nil {
 		return err
@@ -185,7 +186,7 @@ func WriteFileToServer(fname, addr string) error {
 	var blockNum uint16 = 0
 
 	for {
-		buf := make([]byte, 516)
+		buf := make([]byte, optionBlocksize+4)
 		n, srvAddr, err := serverConn.ReadFromUDP(buf)
 		if err != nil {
 			return err
