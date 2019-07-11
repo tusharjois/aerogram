@@ -1,6 +1,7 @@
 package tftp
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -8,7 +9,10 @@ import (
 	"os"
 )
 
-func ListenForWriteRequest(addr string) error {
+// TODO: make this an option
+const optionBlocksize uint16 = 65464
+
+func ListenForWriteRequest(addr, outFile string) error {
 	// fmt.Printf("% x\n", createWriteRequest("rfc1350.txt"))
 	laddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
@@ -31,7 +35,7 @@ func ListenForWriteRequest(addr string) error {
 	}
 
 	// fmt.Printf("%v bytes from %v: %x\n", n, srcAddr, buf[:n])
-	handleFileTransfer(listenConn, srcAddr, buf[:n])
+	handleFileTransfer(listenConn, srcAddr, buf[:n], outFile)
 	// TODO: For go routines, need to track open connections
 	// TODO: Might have to use channels for this
 
@@ -49,8 +53,8 @@ func ListenForWriteRequest(addr string) error {
 }
 
 func handleFileTransfer(listenConn *net.UDPConn, srcAddr *net.UDPAddr,
-	buf []byte) {
-	opcode, data, err := parsePacket(buf)
+	buf []byte, outFile string) {
+	opcode, data, _, err := parsePacket(buf)
 	if err != nil {
 		log.Print(err)
 		return
@@ -65,10 +69,11 @@ func handleFileTransfer(listenConn *net.UDPConn, srcAddr *net.UDPAddr,
 	}
 
 	var f *os.File
-	if string(data) == "stdout" {
+	log.Printf("[INFO] server: receiving file %s\n", string(data))
+	if outFile == "" {
 		f = os.Stdout
 	} else {
-		f, err = os.Create(string(data))
+		f, err = os.Create(outFile)
 		if err != nil {
 			log.Fatal(fmt.Errorf("cannot open file %s: %v", data, err))
 		}
@@ -87,7 +92,7 @@ func handleFileTransfer(listenConn *net.UDPConn, srcAddr *net.UDPAddr,
 
 	for {
 		// TODO: timeouts when not lockstep
-		recv := make([]byte, 516)
+		recv := make([]byte, optionBlocksize+4)
 		// TODO: SrcData?
 		n, srcAddr, err := listenConn.ReadFromUDP(recv)
 		// fmt.Printf("%v bytes from %v: %x\n", n, srcAddr, recv[:n])
@@ -95,7 +100,7 @@ func handleFileTransfer(listenConn *net.UDPConn, srcAddr *net.UDPAddr,
 			log.Print(fmt.Errorf("error when receiving data: %v", err))
 			return
 		}
-		opcode, data, err := parsePacket(recv[:n])
+		opcode, data, block, err := parsePacket(recv[:n])
 		if err != nil {
 			log.Print(fmt.Errorf("error when parsing packet: %v", err))
 			return
@@ -109,7 +114,7 @@ func handleFileTransfer(listenConn *net.UDPConn, srcAddr *net.UDPAddr,
 			return
 		}
 
-		if getPacketBlock(data[0:2]) <= blockNum {
+		if block == blockNum {
 			_, err = listenConn.WriteToUDP(lastPacket.Bytes(), srcAddr)
 			if err != nil {
 				log.Print(fmt.Errorf("error in sending duplicate ACK %d: %v",
@@ -132,11 +137,11 @@ func handleFileTransfer(listenConn *net.UDPConn, srcAddr *net.UDPAddr,
 			return
 		}
 
-		_, err = f.Write(data[2:])
+		_, err = f.Write(data)
 		if err != nil {
 			log.Fatal(fmt.Errorf("error in writing file: %v", err))
 		}
-		if len(data[2:]) < 512 {
+		if len(data) < int(optionBlocksize) {
 			listenConn.Close()
 			break
 		}
@@ -157,6 +162,8 @@ func WriteFileToServer(fname, addr string) error {
 	}
 	defer f.Close()
 
+	reader := bufio.NewReader(f)
+
 	raddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return err
@@ -168,7 +175,7 @@ func WriteFileToServer(fname, addr string) error {
 	}
 	defer serverConn.Close()
 
-	wrq := createWriteRequest(fname)
+	wrq := createWriteRequest(fname, optionBlocksize)
 	_, err = serverConn.Write(wrq.Bytes())
 	if err != nil {
 		return err
@@ -183,9 +190,9 @@ func WriteFileToServer(fname, addr string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%v bytes from %v: %v\n", n, srvAddr, buf[:n])
+		log.Printf("[INFO] client: %v bytes from %v: %v\n", n, srvAddr, buf[:n])
 
-		opcode, data, err := parsePacket(buf[:n])
+		opcode, _, block, err := parsePacket(buf[:n])
 		if err != nil || opcode != opAck {
 			errPkt := createError(errIllegalOp)
 			_, err := serverConn.Write(errPkt.Bytes())
@@ -196,7 +203,7 @@ func WriteFileToServer(fname, addr string) error {
 		}
 
 		// TODO: out-of-order messages
-		if getPacketBlock(data[0:2]) < blockNum {
+		if block != blockNum {
 			_, err = serverConn.Write(lastPacket.Bytes())
 			if err != nil {
 				log.Print(fmt.Errorf("error in sending duplicate data %d: %v",
@@ -210,12 +217,14 @@ func WriteFileToServer(fname, addr string) error {
 		} else {
 			blockNum++
 		}
-		fileData := make([]byte, 512)
-		n, err = f.Read(fileData)
+		fileData := make([]byte, optionBlocksize)
+		// n, err = f.Read(fileData)
+		n, err = reader.Read(fileData)
 		if err != nil && err != io.EOF {
 			log.Fatal(fmt.Errorf("error in reading file %v: %v", fname, err))
 		}
-		// TODO: Perfect multiple of 512, what happens on server side?
+		// Perfect multiple of 512, what happens on server side?
+		// Nothing. The ACK is sent for an empty DAT packet
 		lastPacket = createData(blockNum, fileData[:n])
 		n, err = serverConn.Write(lastPacket.Bytes())
 		if err != nil {
@@ -224,7 +233,8 @@ func WriteFileToServer(fname, addr string) error {
 			return err
 			// TODO: Make the error packet a function
 		}
-		if n < 516 {
+		if n < int(optionBlocksize)+4 {
+			// TODO: get final ack
 			return nil
 		}
 	}
