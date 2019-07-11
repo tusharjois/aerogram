@@ -1,7 +1,7 @@
 package tftp
 
 import (
-	"bufio"
+	// "bufio"
 	"fmt"
 	"io"
 	"log"
@@ -163,7 +163,8 @@ func WriteFileToServer(fname, addr string) error {
 	}
 	defer f.Close()
 
-	reader := bufio.NewReader(f)
+	// reader := bufio.NewReader(f)
+	reader := f
 
 	raddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
@@ -220,8 +221,8 @@ func WriteFileToServer(fname, addr string) error {
 		}
 		fileData := make([]byte, optionBlocksize)
 		// n, err = f.Read(fileData)
-		n, err = reader.Read(fileData)
-		if err != nil && err != io.EOF {
+		n, rErr := reader.Read(fileData)
+		if rErr != nil && rErr != io.EOF {
 			log.Fatal(fmt.Errorf("error in reading file %v: %v", fname, err))
 		}
 		// Perfect multiple of 512, what happens on server side?
@@ -234,7 +235,8 @@ func WriteFileToServer(fname, addr string) error {
 			return err
 			// TODO: Make the error packet a function
 		}
-		if n < int(optionBlocksize)+4 {
+		//if n < int(optionBlocksize)+4 {
+		if rErr == io.EOF {
 			// TODO: get final ack
 			return nil
 		}
