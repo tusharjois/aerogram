@@ -3,10 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/hashicorp/mdns"
-	"github.com/tusharjois/aerogram/tftp"
+	"github.com/micro/mdns"
+	"github.com/tusharjois/aerogram/transfer"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"time"
 )
@@ -26,15 +27,24 @@ func main() {
 	}
 
 	if *isServer {
+		ln, err := net.Listen("tcp", ":26465")
+		if err != nil {
+			// TODO handle error
+		}
+
 		// Setup our service export
 		host, _ := os.Hostname()
 		info := []string{"simple 1:1 filesharing over a local network"}
-		service, _ := mdns.NewMDNSService(host, "_aerogram._udp", "", "", 26465, nil, info)
+		service, _ := mdns.NewMDNSService(host, "_aerogram._tcp.", "", "", 26465, nil, info)
 		server, _ := mdns.NewServer(&mdns.Config{Zone: service})
 		defer server.Shutdown()
-		err := tftp.ListenForWriteRequest("0.0.0.0:26465", *outFile)
-		if err != nil {
-			log.Fatalf("[ERR] server: %s\n", err)
+
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				// handle error
+			}
+			go transfer.ReceiveAerogram(conn, *outFile)
 		}
 	} else {
 		// Make a channel for results and start listening
@@ -43,7 +53,7 @@ func main() {
 
 		go func() {
 			// Start the lookup
-			qParams := mdns.DefaultParams("_aerogram._udp")
+			qParams := mdns.DefaultParams("_aerogram._tcp.")
 			qParams.Timeout = time.Minute
 			qParams.Entries = entriesCh
 			mdns.Query(qParams)
@@ -56,10 +66,17 @@ func main() {
 		}
 		connString := fmt.Sprintf("%s:%d", entry.AddrV4.String(), entry.Port)
 		log.Printf("[INFO] client: connecting to server %s\n", connString)
-		err := tftp.WriteFileToServer(*inFile, connString)
+		conn, err := net.Dial("tcp", connString)
 		if err != nil {
-			log.Fatalf("[ERR] client: %s\n", err)
+			// handle error
+			log.Printf("[ERR] client: ", err)
+			log.Fatalf("[ERR] client: cannot connect to %v\n", connString)
 		}
+		transfer.SendAerogram(conn, *inFile)
+		// err := tftp.WriteFileToServer(*inFile, connString)
+		// if err != nil {
+		// 	log.Fatalf("[ERR] client: %s\n", err)
+		// }
 		os.Exit(0)
 	}
 }
