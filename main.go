@@ -65,7 +65,6 @@ func main() {
 			log.Fatalln("[WARN] aerogram: request timed out")
 		}
 		connString := fmt.Sprintf("%s:%d", entry.AddrV4.String(), entry.Port)
-		log.Printf("[INFO] client: connecting to server %s\n", connString)
 		conn, err := net.Dial("tcp", connString)
 		if err != nil {
 			// handle error
