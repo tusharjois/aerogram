@@ -36,7 +36,27 @@ func main() {
 		// Setup our service export
 		host, _ := os.Hostname()
 		info := []string{"simple 1:1 filesharing over a local network"}
-		service, _ := mdns.NewMDNSService(host, "_aerogram._tcp.", "", "", 26465, nil, info)
+
+		ifaces, _ := net.Interfaces()
+		var ips []net.IP
+		// TODO: handle err
+		for _, i := range ifaces {
+			addrs, _ := i.Addrs()
+			// TODO: handle err
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				// process IP address
+				ips = append(ips, ip)
+			}
+		}
+
+		service, _ := mdns.NewMDNSService(host, "_aerogram._tcp.", "", "", 26465, ips, info)
 		server, _ := mdns.NewServer(&mdns.Config{Zone: service})
 		defer server.Shutdown()
 
@@ -65,6 +85,7 @@ func main() {
 		if !present {
 			log.Fatalln("[WARN] aerogram: request timed out")
 		}
+		fmt.Println(entry)
 		connString := fmt.Sprintf("%s:%d", entry.AddrV4.String(), entry.Port)
 		conn, err := net.Dial("tcp", connString)
 		if err != nil {
