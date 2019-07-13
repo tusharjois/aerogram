@@ -2,14 +2,16 @@ package transfer
 
 import (
 	"bufio"
+	"compress/gzip"
 	"io"
 	"log"
 	"net"
 	"os"
 )
 
-func SendAerogram(conn net.Conn, filename string) error {
+func SendAerogram(conn net.Conn, filename string, useGzip bool) error {
 	log.Printf("[INFO] client: connected to server %v\n", conn.RemoteAddr())
+	defer conn.Close()
 
 	var f *os.File
 	var err error
@@ -25,15 +27,23 @@ func SendAerogram(conn net.Conn, filename string) error {
 		}
 		log.Printf("[INFO] client: reading from %v\n", filename)
 	}
+	defer f.Close()
 	reader := bufio.NewReader(f)
 
-	n, err := io.Copy(conn, reader)
+	var writer io.Writer = conn
+	if useGzip {
+		log.Print("[INFO] client: using compression\n")
+		gWriter := gzip.NewWriter(conn)
+		defer gWriter.Close()
+		writer = gWriter
+	}
+
+	n, err := io.Copy(writer, reader)
 	if err != nil {
 		log.Printf("[ERR] client: %v\n", err)
 		log.Print("[ERR] client: cannot send aerogram\n")
 		return err
 	}
-	conn.Close()
 
 	log.Printf("[INFO] client: sent %v bytes\n", n)
 	return nil

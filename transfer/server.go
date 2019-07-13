@@ -2,14 +2,16 @@ package transfer
 
 import (
 	"bufio"
+	"compress/gzip"
 	"io"
 	"log"
 	"net"
 	"os"
 )
 
-func ReceiveAerogram(conn net.Conn, filename string) {
+func ReceiveAerogram(conn net.Conn, filename string, useGzip bool) {
 	log.Printf("[INFO] server: received conn from %v\n", conn.RemoteAddr())
+	defer conn.Close()
 
 	var f *os.File
 	var err error
@@ -21,13 +23,25 @@ func ReceiveAerogram(conn net.Conn, filename string) {
 		f, err = os.Create(filename)
 		if err != nil {
 			log.Printf("[ERR] server: %v\n", err)
-			log.Fatal("[ERR] server: cannot write to file")
+			log.Fatal("[ERR] server: cannot write to file\n")
 		}
 		log.Printf("[INFO] server: writing to %v\n", filename)
 	}
 	writer := bufio.NewWriter(f)
 
-	n, err := io.Copy(writer, conn)
+	var reader io.Reader = conn
+	if useGzip {
+		log.Print("[INFO] server: using decompression\n")
+		gReader, err := gzip.NewReader(conn)
+		if err != nil {
+			log.Printf("[ERR] server: %v\n", err)
+			log.Fatal("[ERR] server: cannot use compression\n")
+		}
+		defer gReader.Close()
+		reader = gReader
+	}
+
+	n, err := io.Copy(writer, reader)
 	if err != nil {
 		log.Printf("[ERR] server: %v\n", err)
 		log.Print("[ERR] server: cannot receive aerogram\n")

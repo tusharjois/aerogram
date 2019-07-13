@@ -18,6 +18,7 @@ func main() {
 	var inFile = flag.String("infile", "", "filename to send, leave blank for stdin")
 	var outFile = flag.String("outfile", "", "filename to save as, leave blank for stdout")
 	var isDebug = flag.Bool("debug", false, "show debug log")
+	var useGzip = flag.Bool("gzip", false, "compress/decompress with gzip")
 	// var timeoutFlag = flag.Duration("timeout", time.Minute, "amount of time to wait for a connection")
 	flag.Parse()
 
@@ -44,7 +45,7 @@ func main() {
 			if err != nil {
 				// handle error
 			}
-			go transfer.ReceiveAerogram(conn, *outFile)
+			go transfer.ReceiveAerogram(conn, *outFile, *useGzip)
 		}
 	} else {
 		// Make a channel for results and start listening
@@ -71,7 +72,7 @@ func main() {
 			log.Printf("[ERR] client: ", err)
 			log.Fatalf("[ERR] client: cannot connect to %v\n", connString)
 		}
-		transfer.SendAerogram(conn, *inFile)
+		transfer.SendAerogram(conn, *inFile, *useGzip)
 		// err := tftp.WriteFileToServer(*inFile, connString)
 		// if err != nil {
 		// 	log.Fatalf("[ERR] client: %s\n", err)
