@@ -14,7 +14,8 @@ import (
 
 func main() {
 	// TODO: actual command line flags
-	var isServer = flag.Bool("server", false, "runs in server mode if enabled")
+	var isServer = flag.Bool("recv", false, "receive a file")
+	var isClient = flag.Bool("send", false, "send a file")
 	var inFile = flag.String("infile", "", "filename to send, leave blank for stdin")
 	var outFile = flag.String("outfile", "", "filename to save as, leave blank for stdout")
 	var isDebug = flag.Bool("debug", false, "show debug log")
@@ -63,11 +64,17 @@ func main() {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
-				// handle error
+				// TODO handle error
 			}
-			go transfer.ReceiveAerogram(conn, *outFile, *useGzip)
+			//go func() {
+			err = transfer.ReceiveAerogram(conn, *outFile, *useGzip)
+			if err != nil {
+				log.Fatalf("[ERR] server: %v\n", err)
+			}
+			//}()
+			return
 		}
-	} else {
+	} else if *isClient {
 		// Make a channel for results and start listening
 		// TODO: allow for more than 1
 		entriesCh := make(chan *mdns.ServiceEntry, 1)
@@ -98,6 +105,8 @@ func main() {
 		// if err != nil {
 		// 	log.Fatalf("[ERR] client: %s\n", err)
 		// }
-		os.Exit(0)
+	} else {
+		fmt.Fprintln(os.Stderr, "please specify --send or --recv")
+		os.Exit(1)
 	}
 }
