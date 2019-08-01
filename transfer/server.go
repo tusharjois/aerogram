@@ -10,6 +10,7 @@ import (
 	"os"
 )
 
+// ReceiveAerogram Receive an aerogram from a client.
 func ReceiveAerogram(conn net.Conn, filename string, useGzip bool) error {
 	log.Printf("[INFO] server: received conn from %v\n", conn.RemoteAddr())
 	defer conn.Close()

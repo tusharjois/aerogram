@@ -17,7 +17,6 @@ func main() {
 	var outFile = flag.String("recvfile", "", "filename to save as, leave blank for stdout")
 	var useGzip = flag.Bool("gzip", false, "compress/decompress with gzip")
 	var isDebug = flag.Bool("debug", false, "show debug log")
-	// TODO: "secure" flag
 	flag.Parse()
 
 	if !*isDebug {
@@ -87,7 +86,6 @@ func main() {
 		// Receive the aerogram.
 		err = transfer.ReceiveAerogram(conn, *outFile, *useGzip)
 		if err != nil {
-			log.Printf("[ERR] server: %v\n", err)
 			fmt.Fprintf(os.Stderr, "error: cannot receive aerogram from %v\n", conn.RemoteAddr().String())
 			os.Exit(1)
 		}
@@ -124,7 +122,6 @@ func main() {
 		// Send the aerogram.
 		err = transfer.SendAerogram(conn, *inFile, *useGzip)
 		if err != nil {
-			log.Printf("[ERR] client: %v\n", err)
 			fmt.Fprintf(os.Stderr, "error: cannot send aerogram to %v\n", connString)
 			os.Exit(1)
 		}

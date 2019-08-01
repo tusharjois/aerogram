@@ -9,6 +9,7 @@ import (
 	"os"
 )
 
+// SendAerogram Send an aerogram to a server.
 func SendAerogram(conn net.Conn, filename string, useGzip bool) error {
 	log.Printf("[INFO] client: connected to server %v\n", conn.RemoteAddr())
 	defer conn.Close()
